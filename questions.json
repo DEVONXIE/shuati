@@ -1,0 +1,40 @@
+[
+    {
+        "num": 1,
+        "question": "Python 是一种解释型语言。",
+        "options": null,
+        "answer": "正确",
+        "type": "trueOrFalse",
+        "explanation": ""
+    },
+    {
+        "num": 2,
+        "question": "以下哪种不是 Python 的基本数据类型？",
+        "options": [
+            "整数",
+            "浮点数",
+            "字符串",
+            "数组"
+        ],
+        "answer": "D",
+        "type": "singleSelect",
+        "explanation": ""
+    },
+    {
+        "num": 3,
+        "question": "下列哪些是 Python 中的关键字？",
+        "options": [
+            "if",
+            "then",
+            "for",
+            "class"
+        ],
+        "answer": [
+            "A",
+            "C",
+            "D"
+        ],
+        "type": "multipleSelect",
+        "explanation": ""
+    }
+]

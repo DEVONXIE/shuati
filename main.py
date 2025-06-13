@@ -44,6 +44,7 @@ def ini_data(usrId, nickName):
                 "wrongCount": 0,
                 "totalAttempts": 0,
                 "consecutiveCorrect": 0,
+                "lastCorrectAttempt": 0,
             }
             for i in range(1337)  # 题号从 1 到 1000
         ],
@@ -54,6 +55,7 @@ def ini_data(usrId, nickName):
                 "wrongCount": 0,
                 "totalAttempts": 0,
                 "consecutiveCorrect": 0,
+                "lastCorrectAttempt": 0,
             }
             for i in range(1156)  # 题号从 1 到 1000
         ],
@@ -109,39 +111,51 @@ def fetchQuestions(file):
     return
 
 
-def computeScore(correct, wrong):
+def computeScore(q):
+    cc = q["consecutiveCorrect"]
+    correct = q["correctCount"]
+    wrong = q["wrongCount"]
+
+    # 已学会的题（连对 ≥ 3）完全不出现
+    if cc >= 3:
+        return float("-inf")
+
+    # 巩固：连对=2 且已经很久没出现
+    if (cc == 1 or cc == 2) and (
+        st.session_state.currentAttempt - q["lastCorrectAttempt"] >= 20
+    ):
+        return 999  # 最高优先级巩固
+
+    # 新题（没做过）
     if correct == 0 and wrong == 0:
-        return 30  # 新题
-    if correct == 0:
-        return 100 + wrong * 10  # 没答对过，优先
-    score = wrong * 10 - correct * 5
-    return max(score, 0)
+        return 50
+
+    # 错题优先：错多的更靠前
+    return max(wrong * 100 - correct * 50, 10)
 
 
 def selectQuestion(question_data):
-    candidates = []
+    weighted = []
 
     for q in question_data:
-        if q.get("consecutiveCorrect", 0) >= 3:
-            continue  # 掌握的题跳过
+        score = computeScore(q)
+        if score == float("-inf"):
+            continue  # 已掌握的不选
+        weighted.append((q["id"], score))
 
-        score = computeScore(q["correctCount"], q["wrongCount"])
-        randomness = random.random()
-        # 加入平局打散机制
-        candidates.append(
-            (score, q["wrongCount"], -q["totalAttempts"], randomness, q["id"])
-        )
+    if not weighted:
+        return None
 
-    if not candidates:
-        return None  # 所有题都掌握了
-    best = max(candidates)
-    return best[-1]  # 返回题号
+    # 拆开 id 和权重
+    ids, weights = zip(*weighted)
+    return random.choices(ids, weights=weights, k=1)[0]
 
 
 def judge(chosenAnswer, correctAnswer, question):
 
     if st.session_state.status:
         if st.button("确定"):
+            st.session_state.currentAttempt += 1
             st.session_state.status = False
             if chosenAnswer == correctAnswer:
                 st.session_state.isCorrect = True
@@ -152,7 +166,9 @@ def judge(chosenAnswer, correctAnswer, question):
                     st.session_state.usrData["xiQuestions"][
                         st.session_state.questionNum
                     ]["correctCount"] += 1
-
+                    st.session_state.usrData["xiQuestions"][
+                        st.session_state.questionNum
+                    ]["lastCorrectAttempt"] = st.session_state.currentAttempt
                 elif st.session_state.selected_bank == "毛概":
                     st.session_state.usrData["maoQuestions"][
                         st.session_state.questionNum
@@ -160,6 +176,9 @@ def judge(chosenAnswer, correctAnswer, question):
                     st.session_state.usrData["maoQuestions"][
                         st.session_state.questionNum
                     ]["correctCount"] += 1
+                    st.session_state.usrData["maoQuestions"][
+                        st.session_state.questionNum
+                    ]["lastCorrectAttempt"] = st.session_state.currentAttempt
             else:
                 st.session_state.isCorrect = False
                 if st.session_state.selected_bank == "习概":
@@ -190,6 +209,7 @@ def judge(chosenAnswer, correctAnswer, question):
             st.session_state.usrData[getQUestionBank()][st.session_state.questionNum][
                 "totalAttempts"
             ] += 1
+
             saveUsrData()
             st.rerun()
     else:
@@ -365,6 +385,8 @@ if "status" not in st.session_state:
     st.session_state.status = True
 if "isCorrect" not in st.session_state:
     st.session_state.isCorrect = False
+if "currentAttempt" not in st.session_state:
+    st.session_state.currentAttempt = 0
 if "selected_bank" not in st.session_state:
     st.session_state.selected_bank = "习概"
 if selected != st.session_state.selected_bank:
@@ -396,4 +418,6 @@ if __name__ == "__main__":
             st.session_state.questionNum = selectQuestion(
                 st.session_state.usrData[getQUestionBank()]
             )
+        # st.write(st.session_state.questionNum)
+        # st.write(st.session_state.usrData["xiQuestions"][st.session_state.questionNum])
         questionPage(questionDatas)

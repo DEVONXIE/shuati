@@ -20,9 +20,9 @@ selected = option_menu(
 
 def getQUestionBank():
     if st.session_state.selected_bank == "习概":
-        return "xiQuestionCount"
+        return "xiQuestions"
     else:
-        return "maoQuestionCount"
+        return "maoQuestions"
 
 
 def saveUsrData():
@@ -37,8 +37,26 @@ def ini_data(usrId, nickName):
         "xiSolvedNum": 0,
         "maoSolvedNum": 0,
         "solvedNum": 0,
-        "xiQuestionCount": {},
-        "maoQuestionCount": {},
+        "xiQuestions": [
+            {
+                "id": i,
+                "correctCount": 0,
+                "wrongCount": 0,
+                "totalAttempts": 0,
+                "consecutiveCorrect": 0,
+            }
+            for i in range(1337)  # 题号从 1 到 1000
+        ],
+        "maoQuestions": [
+            {
+                "id": i,
+                "correctCount": 0,
+                "wrongCount": 0,
+                "totalAttempts": 0,
+                "consecutiveCorrect": 0,
+            }
+            for i in range(1156)  # 题号从 1 到 1000
+        ],
     }
     with open(f"{usrId}.json", "w", encoding="utf-8") as f:
         json.dump(info, f, indent=4, ensure_ascii=False)
@@ -91,15 +109,34 @@ def fetchQuestions(file):
     return
 
 
-def getQuestionNum(len):
-    while 1:
-        num = random.randint(0, len)
-        if (
-            num not in st.session_state.usrData[getQUestionBank()]
-            or st.session_state.usrData[getQUestionBank()][num] < 3
-        ):
-            return num
-    return 0
+def computeScore(correct, wrong):
+    if correct == 0 and wrong == 0:
+        return 30  # 新题
+    if correct == 0:
+        return 100 + wrong * 10  # 没答对过，优先
+    score = wrong * 10 - correct * 5
+    return max(score, 0)
+
+
+def selectQuestion(question_data):
+    candidates = []
+
+    for q in question_data:
+        if q.get("consecutiveCorrect", 0) >= 3:
+            continue  # 掌握的题跳过
+
+        score = computeScore(q["correctCount"], q["wrongCount"])
+        randomness = random.random()
+        # 加入平局打散机制
+        candidates.append(
+            (score, q["wrongCount"], -q["totalAttempts"], randomness, q["id"])
+        )
+
+    if not candidates:
+        return None  # 所有题都掌握了
+    st.write(candidates)
+    best = max(candidates)
+    return best[-1]  # 返回题号
 
 
 def judge(chosenAnswer, correctAnswer, question):
@@ -110,46 +147,40 @@ def judge(chosenAnswer, correctAnswer, question):
             if chosenAnswer == correctAnswer:
                 st.session_state.isCorrect = True
                 if st.session_state.selected_bank == "习概":
-                    if (
+                    st.session_state.usrData["xiQuestions"][
                         st.session_state.questionNum
-                        not in st.session_state.usrData["xiQuestionCount"]
-                    ):
-                        st.session_state.usrData["xiQuestionCount"][
-                            st.session_state.questionNum
-                        ] = 1
-                    else:
-                        st.session_state.usrData["xiQuestionCount"][
-                            st.session_state.questionNum
-                        ] += 1
+                    ]["consecutiveCorrect"] += 1
+                    st.session_state.usrData["xiQuestions"][
+                        st.session_state.questionNum
+                    ]["correctCount"] += 1
+
                 elif st.session_state.selected_bank == "毛概":
-                    if (
+                    st.session_state.usrData["maoQuestions"][
                         st.session_state.questionNum
-                        not in st.session_state.usrData["maoQuestionCount"]
-                    ):
-                        st.session_state.usrData["maoQuestionCount"][
-                            st.session_state.questionNum
-                        ] = 1
-                    else:
-                        st.session_state.usrData["maoQuestionCount"][
-                            st.session_state.questionNum
-                        ] += 1
+                    ]["consecutiveCorrect"] += 1
+                    st.session_state.usrData["maoQuestions"][
+                        st.session_state.questionNum
+                    ]["correctCount"] += 1
             else:
                 st.session_state.isCorrect = False
                 if st.session_state.selected_bank == "习概":
-
-                    st.session_state.usrData["xiQuestionCount"][
+                    st.session_state.usrData["xiQuestions"][
                         st.session_state.questionNum
-                    ] = 0
-
+                    ]["consecutiveCorrect"] = 0
+                    st.session_state.usrData["xiQuestions"][
+                        st.session_state.questionNum
+                    ]["wrongCount"] += 1
                 elif st.session_state.selected_bank == "毛概":
-
-                    st.session_state.usrData["maoQuestionCount"][
+                    st.session_state.usrData["maoQuestions"][
                         st.session_state.questionNum
-                    ] = 0
+                    ]["consecutiveCorrect"] = 0
+                    st.session_state.usrData["maoQuestions"][
+                        st.session_state.questionNum
+                    ]["wrongCount"] += 1
             if (
                 st.session_state.usrData[getQUestionBank()][
                     st.session_state.questionNum
-                ]
+                ]["consecutiveCorrect"]
                 == 3
             ):
                 if st.session_state.selected_bank == "习概":
@@ -157,6 +188,9 @@ def judge(chosenAnswer, correctAnswer, question):
                 else:
                     st.session_state.usrData["maoSolvedNum"] += 1
             st.session_state.usrData["solvedNum"] += 1
+            st.session_state.usrData[getQUestionBank()][st.session_state.questionNum][
+                "totalAttempts"
+            ] += 1
             saveUsrData()
             st.rerun()
     else:
@@ -167,8 +201,8 @@ def judge(chosenAnswer, correctAnswer, question):
             st.error(f'😭答案错误  正确答案:{question["answer"]}')
         if bt:
             st.session_state.status = True
-            st.session_state.questionNum = getQuestionNum(
-                st.session_state.questionsCount - 1
+            st.session_state.questionNum = selectQuestion(
+                st.session_state.usrData[getQUestionBank()]
             )
             st.rerun()
 
@@ -214,7 +248,7 @@ def questionPage(questions):
         st.markdown(
             f"""
             <div style="border: 1px solid ; border-radius: 8px; padding: 16px;">
-                <p >{questionType}  {correctCnt}/3</p>
+                <p >{questionType}</p>
                 <p >{st.session_state.questionNum + 1}({correctCnt}/3). {questions[st.session_state.questionNum]["question"]}</p>
             </div>
             """,
@@ -231,7 +265,7 @@ def questionPage(questions):
         st.markdown(
             f"""
             <div style="border: 1px solid ; border-radius: 8px; padding: 16px;">
-                <p >{questionType}  {correctCnt}/3</p>
+                <p >{questionType}</p>
                 <p >{st.session_state.questionNum + 1}({correctCnt}/3). {questions[st.session_state.questionNum]["question"]}</p>
             </div>
             """,
@@ -336,7 +370,9 @@ if "selected_bank" not in st.session_state:
     st.session_state.selected_bank = "习概"
 if selected != st.session_state.selected_bank:
     st.session_state.selected_bank = selected
-    st.session_state.questionNum = random.randint(0, 800)
+    st.session_state.questionNum = selectQuestion(
+        st.session_state.usrData[getQUestionBank()]
+    )
     st.session_state.status = True
     st.session_state.history_results = []
     st.rerun()
@@ -346,6 +382,7 @@ if __name__ == "__main__":
     if "is_login" not in st.session_state:
         loginPage()
     elif st.session_state.is_login == True:
+
         questionsPath = ""
         if st.session_state.selected_bank == "习概":
             questionsPath = "xi/xiQuestions.json"
@@ -357,7 +394,9 @@ if __name__ == "__main__":
             st.session_state.usrData = loadUsrData(st.session_state.usrId)
         st.session_state.questionsCount = len(questionDatas)
         if "questionNum" not in st.session_state:
-            st.session_state.questionNum = getQuestionNum(
-                st.session_state.questionsCount - 1
+            st.session_state.questionNum = selectQuestion(
+                st.session_state.usrData[getQUestionBank()]
             )
+        st.write(st.session_state.questionNum)
+        st.write(st.session_state.usrData["xiQuestions"][st.session_state.questionNum])
         questionPage(questionDatas)

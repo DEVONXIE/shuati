@@ -134,7 +134,6 @@ def selectQuestion(question_data):
 
     if not candidates:
         return None  # 所有题都掌握了
-    st.write(candidates)
     best = max(candidates)
     return best[-1]  # 返回题号
 
@@ -397,6 +396,4 @@ if __name__ == "__main__":
             st.session_state.questionNum = selectQuestion(
                 st.session_state.usrData[getQUestionBank()]
             )
-        st.write(st.session_state.questionNum)
-        st.write(st.session_state.usrData["xiQuestions"][st.session_state.questionNum])
         questionPage(questionDatas)

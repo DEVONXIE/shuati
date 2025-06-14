@@ -124,14 +124,14 @@ def computeScore(q):
     if (cc == 1 or cc == 2) and (
         st.session_state.currentAttempt - q["lastCorrectAttempt"] >= 20
     ):
-        return 999  # 最高优先级巩固
+        return 9999  # 最高优先级巩固
 
     # 新题（没做过）
     if correct == 0 and wrong == 0:
         return 50
 
     # 错题优先：错多的更靠前
-    return max(wrong * 100 - correct * 50, 10)
+    return max(wrong * 500 - correct * 100, 50)
 
 
 def selectQuestion(question_data):
@@ -257,12 +257,9 @@ def questionPage(questions):
         progress = st.progress(
             st.session_state.usrData["maoSolvedNum"] / len(questions)
         )
-    if st.session_state.questionNum not in st.session_state.usrData[getQUestionBank()]:
-        correctCnt = 0
-    else:
-        correctCnt = st.session_state.usrData[getQUestionBank()][
-            st.session_state.questionNum
-        ]
+    correctCnt = st.session_state.usrData[getQUestionBank()][
+        st.session_state.questionNum
+    ]["consecutiveCorrect"]
     if questions[st.session_state.questionNum]["type"] == "trueOrFalse":
         st.markdown(
             f"""

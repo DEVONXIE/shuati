@@ -4,6 +4,7 @@ import os
 import random
 from streamlit_option_menu import option_menu
 import time
+from collections import Counter
 
 
 selected = option_menu(
@@ -64,38 +65,38 @@ def ini_data(usrId, nickName):
         json.dump(info, f, indent=4, ensure_ascii=False)
 
 
-def creatQuetion(quetion, options, answer):
-    if options is None:
-        data = {
-            "num": 0,
-            "question": quetion,
-            "options": None,
-            "answer": answer,
-            "type": "trueOrFalse",
-            "explanation": "",
-        }
-    else:
-        if len(answer) == 1:
-            data = {
-                "num": 0,
-                "question": quetion,
-                "options": options,
-                "answer": answer,
-                "type": "singleSelect",
-                "explanation": "",
-            }
-        else:
-            data = {
-                "num": 0,
-                "question": quetion,
-                "options": options,
-                "answer": answer,
-                "type": "multipleSelect",
-                "explanation": "",
-            }
-    with open("questions.json", "r", encoding="utf-8") as f:
-        datas = json.load(f)
-    datas.append(data)
+# def creatQuetion(quetion, options, answer):
+#     if options is None:
+#         data = {
+#             "num": 0,
+#             "question": quetion,
+#             "options": None,
+#             "answer": answer,
+#             "type": "trueOrFalse",
+#             "explanation": "",
+#         }
+#     else:
+#         if len(answer) == 1:
+#             data = {
+#                 "num": 0,
+#                 "question": quetion,
+#                 "options": options,
+#                 "answer": answer,
+#                 "type": "singleSelect",
+#                 "explanation": "",
+#             }
+#         else:
+#             data = {
+#                 "num": 0,
+#                 "question": quetion,
+#                 "options": options,
+#                 "answer": answer,
+#                 "type": "multipleSelect",
+#                 "explanation": "",
+#             }
+#     with open("questions.json", "r", encoding="utf-8") as f:
+#         datas = json.load(f)
+#     datas.append(data)
 
 
 def addNumber():
@@ -157,7 +158,7 @@ def judge(chosenAnswer, correctAnswer, question):
         if st.button("确定"):
             st.session_state.currentAttempt += 1
             st.session_state.status = False
-            if chosenAnswer == correctAnswer:
+            if Counter(chosenAnswer) == Counter(correctAnswer):
                 st.session_state.isCorrect = True
                 if st.session_state.selected_bank == "习概":
                     st.session_state.usrData["xiQuestions"][
@@ -213,16 +214,32 @@ def judge(chosenAnswer, correctAnswer, question):
             saveUsrData()
             st.rerun()
     else:
+        if question["type"] == "singleSelect" or question["type"] == "multipleSelect":
+            shuffledOptions = st.session_state.shuffledOptions  # 打乱后的选项
+            correctAnswerTexts = correctAnswer  # 正确答案的文字内容
+
+            # 构建映射：选项内容 -> 对应字母标签（A/B/C/D）
+            optionToLetter = {
+                text: chr(65 + i) for i, text in enumerate(shuffledOptions)
+            }
+
+            # 把正确答案转为对应的字母形式
+            correctAnswerLetters = [optionToLetter[text] for text in correctAnswerTexts]
+            correctAnswerLetters = sorted(correctAnswerLetters)
+        else:
+            correctAnswerLetters = correctAnswer
         bt = st.button("下一题")
         if st.session_state.isCorrect:
             st.success("✅恭喜你做对啦", icon="🌟")
         else:
-            st.error(f'😭答案错误  正确答案:{question["answer"]}')
+            st.error(f"😭答案错误  正确答案:{correctAnswerLetters}")
+        # st.write(question)
         if bt:
             st.session_state.status = True
             st.session_state.questionNum = selectQuestion(
                 st.session_state.usrData[getQUestionBank()]
             )
+            st.session_state.shuffledOptions = []
             st.rerun()
 
 
@@ -288,18 +305,27 @@ def questionPage(questions):
             unsafe_allow_html=True,
         )
         options = questions[st.session_state.questionNum]["options"]
+        if st.session_state.shuffledOptions == []:
+            random.shuffle(options)
+            st.session_state.shuffledOptions = options.copy()
+            st.rerun()
+
         answer = st.radio(
             label="1",
             options=(
-                f"A:{options[0]}",
-                f"B:{options[1]}",
-                f"C:{options[2]}",
-                f"D:{options[3]}",
+                f"A:{st.session_state.shuffledOptions[0]}",
+                f"B:{st.session_state.shuffledOptions[1]}",
+                f"C:{st.session_state.shuffledOptions[2]}",
+                f"D:{st.session_state.shuffledOptions[3]}",
             ),
             label_visibility="hidden",
         )
+        selectedAnswer = answer.split(":", 1)[1].strip()
+        selectedAnswer = [selectedAnswer]
+        # st.write(selectedAnswer)
+        # st.write(questions[st.session_state.questionNum])
         judge(
-            answer[0],
+            selectedAnswer,
             questions[st.session_state.questionNum]["answer"],
             questions[st.session_state.questionNum],
         )
@@ -315,10 +341,19 @@ def questionPage(questions):
             unsafe_allow_html=True,
         )
         options = questions[st.session_state.questionNum]["options"]
+        if st.session_state.shuffledOptions == []:
+            random.shuffle(options)
+            st.session_state.shuffledOptions = options.copy()
+            st.rerun()
+
         answers = []
         for i in range(4):
-            if st.checkbox(f"{chr(65 + i)}:{options[i]}", value=False):
-                answers.append(f"{chr(65 + i)}")
+            if st.checkbox(
+                f"{chr(65 + i)}:{st.session_state.shuffledOptions[i]}", value=False
+            ):
+                answers.append(st.session_state.shuffledOptions[i])
+        # st.write(answers)
+        # st.write(questions[st.session_state.questionNum])
         judge(
             answers,
             questions[st.session_state.questionNum]["answer"],
@@ -384,6 +419,8 @@ if "isCorrect" not in st.session_state:
     st.session_state.isCorrect = False
 if "currentAttempt" not in st.session_state:
     st.session_state.currentAttempt = 0
+if "shuffledOptions" not in st.session_state:
+    st.session_state.shuffledOptions = []
 if "selected_bank" not in st.session_state:
     st.session_state.selected_bank = "习概"
 if selected != st.session_state.selected_bank:
@@ -403,9 +440,9 @@ if __name__ == "__main__":
 
         questionsPath = ""
         if st.session_state.selected_bank == "习概":
-            questionsPath = "xi/xiQuestions.json"
+            questionsPath = "xi/xiQuestionsModified.json"
         elif st.session_state.selected_bank == "毛概":
-            questionsPath = "mao/maoQuestions.json"
+            questionsPath = "mao/maoQuestionsModified.json"
         with open(questionsPath, "r", encoding="utf-8") as f:
             questionDatas = json.load(f)
         if st.session_state.usrData == {}:
@@ -415,6 +452,7 @@ if __name__ == "__main__":
             st.session_state.questionNum = selectQuestion(
                 st.session_state.usrData[getQUestionBank()]
             )
+        # st.write(st.session_state.shuffledOptions)
         # st.write(st.session_state.questionNum)
         # st.write(st.session_state.usrData["xiQuestions"][st.session_state.questionNum])
         questionPage(questionDatas)

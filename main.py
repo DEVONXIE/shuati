@@ -38,6 +38,8 @@ def ini_data(usrId, nickName):
         "xiSolvedNum": 0,
         "maoSolvedNum": 0,
         "solvedNum": 0,
+        "currentAttempt": 0,
+        "accuracy": 0,
         "xiQuestions": [
             {
                 "id": i,
@@ -119,11 +121,11 @@ def computeScore(q):
 
     # 已学会的题（连对 ≥ 3）完全不出现
     if cc >= 3:
-        return float("-inf")
+        return 30
 
     # 巩固：连对=2 且已经很久没出现
     if (cc == 1 or cc == 2) and (
-        st.session_state.currentAttempt - q["lastCorrectAttempt"] >= 20
+        st.session_state.usrData["currentAttempt"] - q["lastCorrectAttempt"] >= 20
     ):
         return 9999  # 最高优先级巩固
 
@@ -149,16 +151,21 @@ def selectQuestion(question_data):
 
     # 拆开 id 和权重
     ids, weights = zip(*weighted)
-    return random.choices(ids, weights=weights, k=1)[0]
+
+    res = random.choices(ids, weights=weights, k=1)[0]
+    # st.write(weights[res])
+    # time.sleep(1)
+    return res
 
 
 def judge(chosenAnswer, correctAnswer, question):
 
     if st.session_state.status:
         if st.button("确定"):
-            st.session_state.currentAttempt += 1
+            st.session_state.usrData["currentAttempt"] += 1
             st.session_state.status = False
             if Counter(chosenAnswer) == Counter(correctAnswer):
+                st.session_state.recentAnswers.append(True)
                 st.session_state.isCorrect = True
                 if st.session_state.selected_bank == "习概":
                     st.session_state.usrData["xiQuestions"][
@@ -169,7 +176,7 @@ def judge(chosenAnswer, correctAnswer, question):
                     ]["correctCount"] += 1
                     st.session_state.usrData["xiQuestions"][
                         st.session_state.questionNum
-                    ]["lastCorrectAttempt"] = st.session_state.currentAttempt
+                    ]["lastCorrectAttempt"] = st.session_state.usrData["currentAttempt"]
                 elif st.session_state.selected_bank == "毛概":
                     st.session_state.usrData["maoQuestions"][
                         st.session_state.questionNum
@@ -179,10 +186,18 @@ def judge(chosenAnswer, correctAnswer, question):
                     ]["correctCount"] += 1
                     st.session_state.usrData["maoQuestions"][
                         st.session_state.questionNum
-                    ]["lastCorrectAttempt"] = st.session_state.currentAttempt
+                    ]["lastCorrectAttempt"] = st.session_state.usrData["currentAttempt"]
             else:
+                st.session_state.recentAnswers.append(False)
                 st.session_state.isCorrect = False
                 if st.session_state.selected_bank == "习概":
+                    if (
+                        st.session_state.usrData["xiQuestions"][
+                            st.session_state.questionNum
+                        ]["consecutiveCorrect"]
+                        >= 3
+                    ):
+                        st.session_state.usrData["xiSolvedNum"] -= 1
                     st.session_state.usrData["xiQuestions"][
                         st.session_state.questionNum
                     ]["consecutiveCorrect"] = 0
@@ -190,6 +205,13 @@ def judge(chosenAnswer, correctAnswer, question):
                         st.session_state.questionNum
                     ]["wrongCount"] += 1
                 elif st.session_state.selected_bank == "毛概":
+                    if (
+                        st.session_state.usrData["maoQuestions"][
+                            st.session_state.questionNum
+                        ]["consecutiveCorrect"]
+                        >= 3
+                    ):
+                        st.session_state.usrData["maoSolvedNum"] -= 1
                     st.session_state.usrData["maoQuestions"][
                         st.session_state.questionNum
                     ]["consecutiveCorrect"] = 0
@@ -206,6 +228,12 @@ def judge(chosenAnswer, correctAnswer, question):
                     st.session_state.usrData["xiSolvedNum"] += 1
                 else:
                     st.session_state.usrData["maoSolvedNum"] += 1
+            if len(st.session_state.recentAnswers) > 50:
+                st.session_state.recentAnswers.pop(0)
+            if len(st.session_state.recentAnswers) > 0:
+                correct_count = sum(st.session_state.recentAnswers)
+                accuracy = correct_count / len(st.session_state.recentAnswers)
+                st.session_state.usrData["accuracy"] = accuracy * 100
             st.session_state.usrData["solvedNum"] += 1
             st.session_state.usrData[getQUestionBank()][st.session_state.questionNum][
                 "totalAttempts"
@@ -256,6 +284,7 @@ def questionPage(questions):
         <div style="border: 1px solid ; border-radius: 8px; padding: 16px;">
             <p>昵称：{st.session_state.usrData["nickName"]}</p>
             <p>已刷题目数量：{st.session_state.usrData["solvedNum"]}</p>
+            <p>最近50题正确率：{st.session_state.usrData["accuracy"]:.2f}%</p>
             <p>已解决习概题目数量（每题连续做对三次算一题）：{st.session_state.usrData["xiSolvedNum"]}</p>
             <p>已解决毛概题目数量（每题连续做对三次算一题）：{st.session_state.usrData["maoSolvedNum"]}</p>
         </div>
@@ -405,6 +434,8 @@ def loadUsrData(usrId):
     return None
 
 
+if "recentAnswers" not in st.session_state:
+    st.session_state.recentAnswers = []
 if "questionsCount" not in st.session_state:
     st.session_state.questionsCount = 0
 if "usrId" not in st.session_state:
@@ -417,8 +448,6 @@ if "status" not in st.session_state:
     st.session_state.status = True
 if "isCorrect" not in st.session_state:
     st.session_state.isCorrect = False
-if "currentAttempt" not in st.session_state:
-    st.session_state.currentAttempt = 0
 if "shuffledOptions" not in st.session_state:
     st.session_state.shuffledOptions = []
 if "selected_bank" not in st.session_state:
